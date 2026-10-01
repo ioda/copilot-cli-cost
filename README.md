@@ -13,6 +13,7 @@ The calculator stores canonical cost in USD and converts to a selected display c
 - `/cost` command for active-session estimates
 - `/cost session <session-id>` for completed local sessions
 - Native cost panel with token bucket breakdowns
+- Model pricing subtabs for Powerful, Versatile, and Lightweight, with benchmark-backed capability/price comparisons
 - What-if subscription comparison for Copilot Free, Pro, Pro+, Max, Business, Enterprise, and Student
 - Display currency selector backed by cached Frankfurter USD exchange rates
 - Statusline cost segment with optional passthrough to another statusline
