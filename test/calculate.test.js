@@ -15,6 +15,7 @@ import { mergeStatusLinePayload, statusLinePayloadToSessionUsage } from "../src/
 import { writeCurrentSubscriptionCache } from "../src/core/subscription.js";
 import { mergeResumedSessionUsage, usageMetricsToSessionUsage } from "../src/core/usage-metrics.js";
 import { formatPackageVersion } from "../src/core/version.js";
+import { pricingSource, publishedPricingModels, usageBasedRates } from "../src/core/rates.js";
 
 const sessionUsage = {
   sessionId: "test-session",
@@ -37,6 +38,28 @@ const sessionUsage = {
   ]
 };
 
+test("keeps the pricing catalog aligned with the verified GitHub source", () => {
+  assert.equal(pricingSource.url, "https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing");
+  assert.equal(pricingSource.verifiedAt, "2026-10-01");
+  assert.equal(usageBasedRates["gpt-5-mini"].inputPerMillionUsd, 0.25);
+  assert.equal(usageBasedRates["gpt-5.6-luna"].longContext.outputPerMillionUsd, 1.8);
+  assert.equal(usageBasedRates["gpt-6-astra"].longContext.cacheWritePerMillionUsd, 25);
+  assert.equal(usageBasedRates["gpt-6-luna"].longContext.outputPerMillionUsd, 0.75);
+  assert.equal(usageBasedRates["gpt-6-sol"].longContext.outputPerMillionUsd, 15);
+  assert.equal(usageBasedRates["gpt-6.1-sol"].cachedInputPerMillionUsd, 0.1);
+  assert.equal(usageBasedRates["gpt-6.1-sol"].longContext.cachedInputPerMillionUsd, 0.2);
+  assert.equal(usageBasedRates["claude-opus-5.5"].outputPerMillionUsd, 20);
+  assert.equal(usageBasedRates["claude-sonnet-5.5"].outputPerMillionUsd, 10);
+  assert.equal(publishedPricingModels.includes("raptor-mini"), false);
+  assert.equal(publishedPricingModels.includes("mai-code-1-flash"), false);
+  assert.equal(publishedPricingModels.includes("claude-fable-5.1"), true);
+  assert.equal(publishedPricingModels.includes("claude-sonnet-5.5"), true);
+  assert.equal(publishedPricingModels.includes("grok-4.7"), true);
+  assert.equal(new Set(publishedPricingModels).size, publishedPricingModels.length);
+  assert.equal(publishedPricingModels.length, 35);
+  assert.equal("mai-code-1-flash" in usageBasedRates, true);
+});
+
 test("prints the package version", () => {
   const result = spawnSync(process.execPath, [path.join(import.meta.dirname, "..", "src", "cli", "cost.js"), "--version"], {
     encoding: "utf8"
@@ -52,6 +75,33 @@ test("calculates usage-based billing from token buckets", () => {
     billingModel: "usage-based",
     plan: "pro",
     currency: "USD"
+  });
+
+  test("uses the published Gemini 3.8 Flash pricing", () => {
+    const result = calculateSessionCost({
+      sessionId: "gemini-3-8-test",
+      modelUsage: [{
+        model: "Gemini 3.8 Flash",
+        requests: 1,
+        inputTokens: 1_000_000,
+        cachedInputTokens: 1_000_000,
+        outputTokens: 1_000_000
+      }]
+    }, {
+      billingModel: "usage-based",
+      plan: "pro",
+      currency: "USD"
+    });
+
+    assert.equal(result.totalUsd, 3.825);
+    assert.equal(result.modelBreakdown[0].model, "gemini-3.8-flash");
+    assert.deepEqual(result.modelBreakdown[0].rates, {
+      inputPerMillionUsd: 0.75,
+      cachedInputPerMillionUsd: 0.075,
+      cacheWritePerMillionUsd: 0,
+      outputPerMillionUsd: 3.75,
+      reasoningPerMillionUsd: 0
+    });
   });
 
   assert.equal(result.totalUsd, 65.05);
@@ -77,6 +127,54 @@ test("calculates usage-based billing from token buckets", () => {
   assert.equal(result.modelBreakdown[0].inputUsd, 0);
   assert.equal(result.modelBreakdown[0].cachedInputUsd, 1);
   assert.equal(result.modelBreakdown[0].outputUsd, 45);
+});
+
+test("uses the published GPT-5.6 Sol default and long-context pricing", () => {
+  const defaultTier = calculateSessionCost({
+    sessionId: "gpt-5-6-sol-default",
+    modelUsage: [{
+      model: "GPT-5.6 Sol",
+      inputTokens: 100_000,
+      cachedInputTokens: 100_000,
+      cacheWriteTokens: 1_000_000,
+      outputTokens: 1_000_000
+    }]
+  }, {
+    billingModel: "usage-based",
+    plan: "pro",
+    currency: "USD"
+  });
+  const longContextTier = calculateSessionCost({
+    sessionId: "gpt-5-6-sol-long-context",
+    modelUsage: [{
+      model: "GPT-5.6 Sol",
+      inputTokens: 273_000,
+      cachedInputTokens: 273_000,
+      cacheWriteTokens: 1_000_000,
+      outputTokens: 1_000_000
+    }]
+  }, {
+    billingModel: "usage-based",
+    plan: "pro",
+    currency: "USD"
+  });
+
+  assert.deepEqual(defaultTier.modelBreakdown[0].rates, {
+    inputPerMillionUsd: 4,
+    cachedInputPerMillionUsd: 0.4,
+    cacheWritePerMillionUsd: 5,
+    outputPerMillionUsd: 20,
+    reasoningPerMillionUsd: 0
+  });
+  assert.equal(defaultTier.modelBreakdown[0].rateTier, "default");
+  assert.deepEqual(longContextTier.modelBreakdown[0].rates, {
+    inputPerMillionUsd: 8,
+    cachedInputPerMillionUsd: 0.8,
+    cacheWritePerMillionUsd: 10,
+    outputPerMillionUsd: 30,
+    reasoningPerMillionUsd: 0
+  });
+  assert.equal(longContextTier.modelBreakdown[0].rateTier, "long-context");
 });
 
 test("calculates usage-based allowances with individual flex allotments", () => {
@@ -283,6 +381,50 @@ test("selects long-context pricing for thresholded and named large-context model
   assert.equal(named.totalUsd, 18.04);
 });
 
+test("uses published pricing for Claude Opus fast mode and Grok long context", () => {
+  const fastOpus = calculateSessionCost(
+    {
+      sessionId: "fast-opus-session",
+      modelUsage: [
+        {
+          model: "Claude Opus 4.8 (fast mode) (preview)",
+          inputTokens: 1_000_000,
+          cachedInputTokens: 500_000,
+          cacheWriteTokens: 1_000_000,
+          outputTokens: 1_000_000
+        }
+      ]
+    },
+    {
+      billingModel: "usage-based",
+      currency: "USD"
+    }
+  );
+  const grok = calculateSessionCost(
+    {
+      sessionId: "grok-long-context-session",
+      modelUsage: [
+        {
+          model: "Grok 4.6",
+          inputTokens: 200_001,
+          cachedInputTokens: 100_000,
+          outputTokens: 1_000_000
+        }
+      ]
+    },
+    {
+      billingModel: "usage-based",
+      currency: "USD"
+    }
+  );
+
+  assert.equal(fastOpus.modelBreakdown[0].model, "claude-opus-4.8-fast");
+  assert.equal(fastOpus.totalUsd, 68);
+  assert.equal(grok.modelBreakdown[0].rateTier, "long-context");
+  assert.equal(grok.modelBreakdown[0].rateThresholdInputTokens, 200_000);
+  assert.equal(grok.totalUsd, 12.500004);
+});
+
 test("calculates usage-based billing for Claude Fable 5", () => {
   const result = calculateSessionCost(
     {
@@ -312,6 +454,37 @@ test("calculates usage-based billing for Claude Fable 5", () => {
     reasoningPerMillionUsd: 0
   });
   assert.equal(result.totalUsd, 68);
+});
+
+test("calculates usage-based billing for Claude Fable 5.1", () => {
+  const result = calculateSessionCost(
+    {
+      sessionId: "claude-fable-5-1-session",
+      modelUsage: [
+        {
+          model: "Claude Fable 5.1",
+          inputTokens: 1_000_000,
+          cachedInputTokens: 500_000,
+          cacheWriteTokens: 1_000_000,
+          outputTokens: 1_000_000
+        }
+      ]
+    },
+    {
+      billingModel: "usage-based",
+      currency: "USD"
+    }
+  );
+
+  assert.equal(result.modelBreakdown[0].model, "claude-fable-5.1");
+  assert.deepEqual(result.modelBreakdown[0].rates, {
+    inputPerMillionUsd: 10,
+    cachedInputPerMillionUsd: 0.25,
+    cacheWritePerMillionUsd: 12.5,
+    outputPerMillionUsd: 50,
+    reasoningPerMillionUsd: 0
+  });
+  assert.equal(result.totalUsd, 67.625);
 });
 
 test("prefers Copilot-reported session AI credits when available", () => {

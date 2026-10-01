@@ -1,10 +1,24 @@
+import { evaluateModels, evaluationCategories, evaluationEfforts, sampleWorkload } from "./model-evaluation.js";
+
 const elements = {
+  benchmarkNote: document.getElementById("benchmark-note"),
   breakdown: document.getElementById("breakdown"),
+  categoryContent: document.getElementById("category-content"),
+  categoryTabs: document.getElementById("category-tabs"),
   currency: document.getElementById("currency"),
   currencyNote: document.getElementById("currency-note"),
   currentPlan: document.getElementById("current-plan"),
   extensionVersion: document.getElementById("extension-version"),
+  effortScores: document.getElementById("effort-scores"),
+  evaluationEffort: document.getElementById("evaluation-effort"),
+  evaluationError: document.getElementById("evaluation-error"),
+  evaluationFloor: document.getElementById("evaluation-floor"),
+  evaluationResults: document.getElementById("evaluation-results"),
+  evaluationSummary: document.getElementById("evaluation-summary"),
   plan: document.getElementById("plan"),
+  pricing: document.getElementById("pricing"),
+  pricingNote: document.getElementById("pricing-note"),
+  pricingTab: document.getElementById("pricing-tab"),
   raw: document.getElementById("raw"),
   refresh: document.getElementById("refresh"),
   sessionCurrent: document.getElementById("session-current"),
@@ -13,19 +27,28 @@ const elements = {
   sessionPickerNote: document.getElementById("session-picker-note"),
   sessionQuery: document.getElementById("session-query"),
   sessionToggle: document.getElementById("session-toggle"),
+  tabBreakdown: document.getElementById("tab-breakdown"),
+  tabPricing: document.getElementById("tab-pricing"),
   source: document.getElementById("source"),
   status: document.getElementById("status"),
   updatedAt: document.getElementById("updated-at"),
   usageAllowance: document.getElementById("usage-allowance"),
   usageSubtitle: document.getElementById("usage-subtitle"),
   usageTotal: document.getElementById("usage-total"),
-  whatIfNote: document.getElementById("what-if-note")
+  whatIfNote: document.getElementById("what-if-note"),
+  workloadInput: document.getElementById("workload-input"),
+  workloadCached: document.getElementById("workload-cached"),
+  workloadWrite: document.getElementById("workload-write"),
+  workloadOutput: document.getElementById("workload-output"),
+  workloadReset: document.getElementById("workload-reset")
 };
 let selectedCurrency;
 let selectedPlan;
 let selectedSession = { source: "live" };
 let sessionListOpen = false;
 let sessionItems = [];
+let selectedCategory = "Powerful";
+let latestData;
 const planAllowances = {
   free: { baseAiCredits: 0, flexAiCredits: 0, totalAiCredits: 0 },
   pro: { baseAiCredits: 1000, flexAiCredits: 500, totalAiCredits: 1500 },
@@ -103,6 +126,39 @@ elements.currency.addEventListener("change", () => {
   selectedCurrency = elements.currency.value;
   refresh();
 });
+elements.tabBreakdown.addEventListener("click", () => selectTab("breakdown"));
+elements.tabPricing.addEventListener("click", () => selectTab("pricing"));
+elements.categoryTabs.addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-category]");
+  if (tab) {
+    selectPricingCategory(tab.dataset.category);
+  }
+});
+elements.categoryTabs.addEventListener("keydown", (event) => {
+  const tab = event.target.closest("[data-category]");
+  if (!tab || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+    return;
+  }
+  event.preventDefault();
+  const current = evaluationCategories.indexOf(tab.dataset.category);
+  const next = event.key === "Home" ? 0 : event.key === "End" ? evaluationCategories.length - 1
+    : (current + (event.key === "ArrowRight" ? 1 : -1) + evaluationCategories.length) % evaluationCategories.length;
+  selectPricingCategory(evaluationCategories[next]);
+  elements.categoryTabs.querySelector(`[data-category="${evaluationCategories[next]}"]`).focus();
+});
+for (const control of [
+  elements.evaluationEffort, elements.evaluationFloor, elements.workloadInput,
+  elements.workloadCached, elements.workloadWrite, elements.workloadOutput
+]) {
+  control.addEventListener("input", renderModelEvaluation);
+}
+elements.workloadReset.addEventListener("click", () => {
+  elements.workloadInput.value = sampleWorkload.uncachedInputTokens;
+  elements.workloadCached.value = sampleWorkload.cachedInputTokens;
+  elements.workloadWrite.value = sampleWorkload.cacheWriteTokens;
+  elements.workloadOutput.value = sampleWorkload.outputTokens;
+  renderModelEvaluation();
+});
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".session-picker")) {
     closeSessionList();
@@ -159,6 +215,7 @@ async function refresh({ reloadSessions = false } = {}) {
 }
 
 function render(data) {
+  latestData = data;
   const usageBased = data.usageBased;
   const aggregateUsageBased = data.aggregateUsageBased;
   const sessionUsage = data.sessionUsage ?? {};
@@ -202,7 +259,138 @@ function render(data) {
   }
 
   renderBreakdown(usageBased);
+  renderCategoryContent();
   elements.raw.textContent = JSON.stringify(data, null, 2);
+}
+
+function selectPricingCategory(category) {
+  if (!evaluationCategories.includes(category)) {
+    return;
+  }
+  selectedCategory = category;
+  for (const tab of elements.categoryTabs.querySelectorAll("[data-category]")) {
+    const selected = tab.dataset.category === category;
+    tab.classList.toggle("active", selected);
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    if (selected) {
+      elements.categoryContent.setAttribute("aria-labelledby", tab.id);
+    }
+  }
+  renderCategoryContent();
+}
+
+function renderCategoryContent() {
+  if (!latestData) {
+    return;
+  }
+  renderPricing(
+    latestData.modelPricing?.filter((item) => item.category === selectedCategory),
+    latestData.usageBased?.currency,
+    latestData.pricingSource
+  );
+  renderModelEvaluation();
+}
+
+function renderModelEvaluation() {
+  if (!latestData) {
+    return;
+  }
+  const source = latestData.benchmarkSource;
+  elements.benchmarkNote.innerHTML = source
+    ? `<a href="${escapeHtml(source.url)}" data-external>${escapeHtml(source.name)}</a> · snapshot verified ${escapeHtml(source.verifiedAt)}. ${escapeHtml(source.note)}`
+    : "Benchmark snapshot unavailable. No capability-based recommendations can be made.";
+  renderEffortScores();
+  try {
+    const result = evaluateModels(latestData.modelPricing ?? [], latestData.modelBenchmarks, {
+      category: selectedCategory,
+      effort: elements.evaluationEffort.value,
+      qualityFloor: elements.evaluationFloor.valueAsNumber / 100,
+      workload: {
+        uncachedInputTokens: elements.workloadInput.valueAsNumber,
+        cachedInputTokens: elements.workloadCached.valueAsNumber,
+        cacheWriteTokens: elements.workloadWrite.valueAsNumber,
+        outputTokens: elements.workloadOutput.valueAsNumber
+      }
+    });
+    elements.evaluationError.hidden = true;
+    const currency = latestData.usageBased?.currency ?? { code: "USD", exchangeRate: 1 };
+    const effortLabel = elements.evaluationEffort.selectedOptions[0].textContent;
+    const coverage = `${result.scoredCount}/${result.rows.length} models have unqualified scores for ${effortLabel}; ${result.eligibleCount} pass the ${elements.evaluationFloor.value}% floor.`;
+    elements.evaluationSummary.textContent = result.recommendations.length
+      ? `Best estimated value: ${result.recommendations.join(", ")} (${effortLabel}). ${coverage}${result.scoredCount === 1 ? " Only one scored candidate: this is a baseline, not a competitive comparison." : ""}`
+      : `No recommendation. ${coverage}`;
+    elements.evaluationResults.innerHTML = `
+      <div class="pricing-table-wrap">
+        <table>
+          <thead><tr>
+            <th>Model</th><th>Score</th><th>Capability / best</th>
+            <th>Workload cost (${escapeHtml(currency.code)})</th><th>Price tier</th><th>Value</th><th>Decision</th>
+          </tr></thead>
+          <tbody>${result.rows.map((row) => `
+            <tr class="${row.recommended ? "recommended-row" : ""}">
+              <td title="${escapeHtml(row.configuration ?? "No verified benchmark configuration")}">${escapeHtml(row.model)}</td>
+              <td>${row.score === undefined ? "Not verified" : `${formatNumber(row.score, 1)}${row.status === "qualified-benchmark" ? "*" : ""}`}</td>
+              <td>${row.relativeCapability === undefined ? "-" : `${formatNumber(row.relativeCapability * 100, 1)}%`}</td>
+              <td>${formatWorkloadCost(row.workloadCostUsd, currency)}</td>
+              <td>${escapeHtml(row.rateTier)}</td>
+              <td>${row.value === undefined ? "-" : formatNumber(row.value, 3)}</td>
+              <td>${row.recommended ? "Best estimated value" : evaluationStatus(row.status)}</td>
+            </tr>
+          `).join("")}</tbody>
+        </table>
+      </div>`;
+  } catch (error) {
+    elements.evaluationError.textContent = `Unable to evaluate models: ${error.message}`;
+    elements.evaluationError.hidden = false;
+    elements.evaluationSummary.textContent = "No recommendation until the evaluation error is resolved.";
+    elements.evaluationResults.innerHTML = "";
+  }
+}
+
+function evaluationStatus(status) {
+  return {
+    "missing-benchmark": "No comparable score",
+    "qualified-benchmark": "Qualified score; not ranked",
+    "below-floor": "Below capability floor",
+    eligible: "Eligible"
+  }[status] ?? status;
+}
+
+function renderEffortScores() {
+  const models = latestData.modelPricing?.filter((item) => item.category === selectedCategory) ?? [];
+  elements.effortScores.innerHTML = `
+    <div class="pricing-table-wrap"><table>
+      <thead><tr><th>Model</th>${evaluationEfforts.map((effort) =>
+        `<th>${effort === "none" ? "Non-reasoning" : escapeHtml(capitalize(effort))}</th>`
+      ).join("")}<th>Benchmark configuration</th></tr></thead>
+      <tbody>${models.map((item) => {
+        const benchmark = latestData.modelBenchmarks?.[item.model];
+        return `<tr><td>${escapeHtml(item.model)}</td>${evaluationEfforts.map((effort) => {
+          const score = benchmark?.scores?.[effort];
+          return `<td>${score === undefined ? "-" : `${formatNumber(score, 1)}${benchmark.qualifiedEfforts?.includes(effort) ? "*" : ""}`}</td>`;
+        }).join("")}<td class="benchmark-configuration">${escapeHtml(benchmark?.configuration ?? "No verified effort-specific benchmark in this snapshot.")}${benchmark?.unspecifiedEffortScore !== undefined ? ` Score ${formatNumber(benchmark.unspecifiedEffortScore, 1)} (effort unspecified).` : ""}</td></tr>`;
+      }).join("")}</tbody>
+    </table></div>`;
+}
+
+function formatWorkloadCost(usd, currency) {
+  return `~${new Intl.NumberFormat(undefined, {
+    currency: currency.code,
+    maximumFractionDigits: 6,
+    minimumFractionDigits: 4,
+    style: "currency"
+  }).format(usd * Number(currency.exchangeRate ?? 1))}`;
+}
+
+function selectTab(tab) {
+  const pricingSelected = tab === "pricing";
+  elements.breakdown.parentElement.hidden = pricingSelected;
+  elements.pricingTab.hidden = !pricingSelected;
+  elements.tabBreakdown.classList.toggle("active", !pricingSelected);
+  elements.tabPricing.classList.toggle("active", pricingSelected);
+  elements.tabBreakdown.setAttribute("aria-selected", String(!pricingSelected));
+  elements.tabPricing.setAttribute("aria-selected", String(pricingSelected));
 }
 
 function renderSessionPicker() {
@@ -625,6 +813,80 @@ function renderBreakdown(usageBased) {
       </div>
     `;
   }).join("");
+}
+
+function renderPricing(modelPricing, currency, source) {
+  if (!modelPricing?.length) {
+    elements.pricing.innerHTML = "<p class=\"empty\">No model pricing available.</p>";
+    return;
+  }
+
+  const displayCurrency = currency?.code ?? "USD";
+  const exchangeRate = Number(currency?.exchangeRate ?? 1);
+  const sourceDate = source?.verifiedAt ? ` · verified ${source.verifiedAt}` : "";
+  elements.pricingNote.innerHTML = `Published rate estimates per 1M tokens. Equivalents are approximate price/capability comparisons, not official model substitutions. <a href="${escapeHtml(source?.url ?? "https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing")}" data-external>GitHub pricing source</a>${sourceDate}.`;
+  elements.pricing.innerHTML = `
+    <div class="pricing-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Approx. equivalent</th>
+            <th>Category</th>
+            <th>Tier</th>
+            <th>Threshold</th>
+            <th>Input / 1M</th>
+            <th>Cached / 1M</th>
+            <th>Cache write / 1M</th>
+            <th>Output / 1M</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${modelPricing.map((item) => `
+            <tr>
+              <td>${escapeHtml(item.model)}</td>
+              <td class="equivalent">${escapeHtml(item.equivalentModel ?? "—")}</td>
+              <td>${escapeHtml(item.category ?? "—")}</td>
+              <td>${escapeHtml(item.tier ?? "Default")}</td>
+              <td>${formatContextThreshold(item.longContext?.thresholdInputTokens, false)}</td>
+              <td>${formatRate(item.inputPerMillionUsd, exchangeRate, displayCurrency)}</td>
+              <td>${formatRate(item.cachedInputPerMillionUsd, exchangeRate, displayCurrency)}</td>
+              <td>${formatRate(item.cacheWritePerMillionUsd, exchangeRate, displayCurrency)}</td>
+              <td>${formatRate(item.outputPerMillionUsd, exchangeRate, displayCurrency)}</td>
+            </tr>
+            ${item.longContext ? `
+              <tr class="long-context-row">
+                <td>${escapeHtml(item.model)} (long context)</td>
+                <td class="equivalent">${escapeHtml(item.equivalentModel ?? "—")}</td>
+                <td>${escapeHtml(item.category ?? "—")}</td>
+                <td>Long context</td>
+                <td>${formatContextThreshold(item.longContext.thresholdInputTokens, true)}</td>
+                <td>${formatRate(item.longContext.inputPerMillionUsd, exchangeRate, displayCurrency)}</td>
+                <td>${formatRate(item.longContext.cachedInputPerMillionUsd, exchangeRate, displayCurrency)}</td>
+                <td>${formatRate(item.longContext.cacheWritePerMillionUsd, exchangeRate, displayCurrency)}</td>
+                <td>${formatRate(item.longContext.outputPerMillionUsd, exchangeRate, displayCurrency)}</td>
+              </tr>
+            ` : ""}
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function formatRate(value, exchangeRate, currencyCode) {
+  if (value === undefined || value === null) {
+    return "—";
+  }
+  return formatCurrency(Number(value ?? 0) * exchangeRate, currencyCode);
+}
+
+function formatContextThreshold(threshold, longContext) {
+  if (!Number.isFinite(Number(threshold))) {
+    return "—";
+  }
+  const value = formatInteger(threshold);
+  return longContext ? `> ${value}` : `≤ ${value}`;
 }
 
 function formatModelName(item) {

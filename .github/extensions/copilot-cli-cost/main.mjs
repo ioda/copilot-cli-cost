@@ -2,8 +2,10 @@ import { joinSession } from "@github/copilot-sdk/extension";
 import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
 import { calculateSessionCost } from "../../../src/core/calculate.js";
+import { benchmarkSource, modelBenchmarks } from "../../../src/core/benchmarks.js";
 import { formatMoney } from "../../../src/core/currency.js";
 import { getUsdExchangeRate } from "../../../src/core/fx-rates.js";
+import { modelEquivalents, modelMetadata, pricingSource, publishedPricingModels, usageBasedRates } from "../../../src/core/rates.js";
 import { listLiveSessions, readLatestLiveSession, readLiveSession, writeLiveSession } from "../../../src/core/live-session-store.js";
 import { listCompletedSessionSummaries, readRichestSessionUsageFromEvents, readSessionUsageFromEvents, readSessionWorkspaceMetadata } from "../../../src/core/session-events.js";
 import { mapCopilotPlan, resolveConfiguredPlan, writeCurrentSubscriptionCache } from "../../../src/core/subscription.js";
@@ -216,6 +218,7 @@ async function listPanelSessions() {
     currentSessionId,
     extensionVersion,
     generatedAt: new Date().toISOString(),
+    pricingSource,
     sessions: [current, ...liveSessions, ...completedSessions]
   };
 }
@@ -274,10 +277,35 @@ async function getCostData({
     currentSubscription,
     exchangeRate: exchangeRate.rateInfo,
     extensionVersion,
+    pricingSource,
     repoRoot,
     sessionUsage,
     source,
     usageBased,
+    benchmarkSource,
+    modelBenchmarks,
+    modelPricing: publishedPricingModels.map((model) => {
+      const rates = usageBasedRates[model];
+      return {
+        model,
+        equivalentModel: modelEquivalents[model] ?? "—",
+        category: modelMetadata[model]?.category ?? "—",
+        tier: modelMetadata[model]?.tier ?? "Default",
+        inputPerMillionUsd: rates.inputPerMillionUsd,
+        cachedInputPerMillionUsd: rates.cachedInputPerMillionUsd,
+        cacheWritePerMillionUsd: rates.cacheWritePerMillionUsd || undefined,
+        outputPerMillionUsd: rates.outputPerMillionUsd,
+        longContext: rates.longContext
+          ? {
+              inputPerMillionUsd: rates.longContext.inputPerMillionUsd,
+              cachedInputPerMillionUsd: rates.longContext.cachedInputPerMillionUsd,
+              cacheWritePerMillionUsd: rates.longContext.cacheWritePerMillionUsd || undefined,
+              outputPerMillionUsd: rates.longContext.outputPerMillionUsd,
+              thresholdInputTokens: rates.longContext.thresholdInputTokens
+            }
+          : undefined
+      };
+    }),
     selected: usageBased
   };
 }

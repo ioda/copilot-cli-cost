@@ -79,8 +79,68 @@
     </section>
 
     <section class="panel">
-      <h2>Token bucket breakdown</h2>
-      <div id="breakdown" class="breakdown"></div>
+      <nav class="tabs" aria-label="Cost details">
+        <button id="tab-breakdown" class="tab active" type="button" aria-selected="true">Session breakdown</button>
+        <button id="tab-pricing" class="tab" type="button" aria-selected="false">Model pricing</button>
+      </nav>
+      <div id="breakdown-tab">
+        <h2>Token bucket breakdown</h2>
+        <div id="breakdown" class="breakdown"></div>
+      </div>
+      <div id="pricing-tab" hidden>
+        <h2>Model pricing</h2>
+        <nav id="category-tabs" class="tabs category-tabs" role="tablist" aria-label="Model capability category">
+          <button id="category-powerful" class="tab active" type="button" role="tab" aria-selected="true" aria-controls="category-content" data-category="Powerful">Powerful</button>
+          <button id="category-versatile" class="tab" type="button" role="tab" aria-selected="false" aria-controls="category-content" tabindex="-1" data-category="Versatile">Versatile</button>
+          <button id="category-lightweight" class="tab" type="button" role="tab" aria-selected="false" aria-controls="category-content" tabindex="-1" data-category="Lightweight">Lightweight</button>
+        </nav>
+        <div id="category-content" role="tabpanel" aria-labelledby="category-powerful">
+        <section class="model-evaluation" aria-labelledby="evaluation-heading">
+          <h2 id="evaluation-heading">Capability and price value</h2>
+          <div class="evaluation-controls">
+            <label>Reasoning effort
+              <select id="evaluation-effort">
+                <option value="none">Non-reasoning</option>
+                <option value="minimal">Minimal</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="xhigh">XHigh</option>
+                <option value="max" selected>Max</option>
+              </select>
+            </label>
+            <label>Minimum capability (% of best)
+              <input id="evaluation-floor" type="number" min="1" max="100" step="1" value="85">
+            </label>
+          </div>
+          <details class="workload-details">
+            <summary>Workload assumptions (editable)</summary>
+            <p class="hint">Fixed conversation sample, not live session usage or a measured task cost. Treat these quantities as one representative request. Billable output must include reasoning output when charged; do not count those tokens twice.</p>
+            <div class="evaluation-controls workload-controls">
+              <label>Uncached input tokens<input id="workload-input" type="number" min="0" step="1" value="384"></label>
+              <label>Cached input tokens<input id="workload-cached" type="number" min="0" step="1" value="22495"></label>
+              <label>Cache-write tokens<input id="workload-write" type="number" min="0" step="1" value="27619"></label>
+              <label>Billable output tokens<input id="workload-output" type="number" min="0" step="1" value="201"></label>
+            </div>
+            <button id="workload-reset" class="control-button" type="button">Reset conversation sample</button>
+            <p class="hint">Workload cost = sum of token quantity x bucket rate / 1,000,000. Cache-write tokens use the input rate when there is no separate write price. Long-context prices apply when total prompt tokens exceed the model's threshold.</p>
+          </details>
+          <p class="hint evaluation-formula">Value = (score / category best score)^2 / (workload cost / cheapest eligible workload cost). Compare only within this category, effort, and benchmark snapshot. This is a heuristic, not a measured accuracy ratio.</p>
+          <p id="benchmark-note" class="hint"></p>
+          <p class="hint">Different models and efforts may consume different token quantities. Benchmark configurations do not guarantee that the same settings or fallback behavior are available in your CLI. Missing or qualified scores never win a recommendation.</p>
+          <p id="evaluation-summary" class="evaluation-summary" aria-live="polite"></p>
+          <div id="evaluation-error" class="status error" role="alert" hidden></div>
+          <div id="evaluation-results" class="pricing"></div>
+          <details class="effort-scores">
+            <summary>Published capability scores by reasoning effort</summary>
+            <div id="effort-scores" class="pricing"></div>
+          </details>
+        </section>
+        <h2>Published token prices</h2>
+        <p id="pricing-note" class="hint pricing-note">Published rate estimates per 1M tokens. Equivalents are approximate price/capability comparisons, not official model substitutions.</p>
+        <div id="pricing" class="pricing"></div>
+        </div>
+      </div>
     </section>
 
     <details class="panel">

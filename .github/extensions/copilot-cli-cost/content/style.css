@@ -315,6 +315,132 @@ small {
   gap: 10px;
 }
 
+.tabs {
+  border-bottom: 1px solid #30363d;
+  display: flex;
+  gap: 4px;
+  margin: -16px -16px 16px;
+  padding: 8px 16px 0;
+}
+
+.tab {
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: #8b949e;
+  padding: 9px 10px;
+}
+
+.tab:hover,
+.tab.active {
+  background: transparent;
+  border-bottom-color: #2f81f7;
+  color: #e6edf3;
+}
+
+.pricing-note {
+  margin-bottom: 12px;
+}
+
+.category-tabs {
+  margin: 0 0 18px;
+  padding: 0;
+}
+
+.model-evaluation {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.model-evaluation h2 {
+  margin-bottom: 0;
+}
+
+.evaluation-controls {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.evaluation-controls label {
+  color: #c9d1d9;
+  display: grid;
+  font-size: 13px;
+  gap: 6px;
+}
+
+.evaluation-controls select {
+  width: 100%;
+}
+
+.workload-details {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.workload-details > p,
+.workload-controls,
+.workload-details > button {
+  margin-top: 12px;
+}
+
+.evaluation-summary {
+  color: #79c0ff;
+  font-size: 13px;
+}
+
+.recommended-row {
+  background: #12261a;
+}
+
+.recommended-row td:first-child,
+.recommended-row td:last-child {
+  color: #7ee787;
+  font-weight: 600;
+}
+
+.effort-scores summary {
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.pricing .benchmark-configuration {
+  min-width: 240px;
+  text-align: left;
+  white-space: normal;
+}
+
+.tab:focus-visible {
+  outline: 2px solid #79c0ff;
+  outline-offset: -2px;
+}
+
+.pricing-table-wrap {
+  overflow-x: auto;
+}
+
+.pricing table {
+  min-width: 900px;
+}
+
+.pricing th,
+.pricing td {
+  white-space: nowrap;
+}
+
+.pricing .equivalent {
+  color: #79c0ff;
+  text-align: left;
+}
+
+.long-context-row td {
+  color: #8b949e;
+  font-size: 12px;
+}
+
 .model-card {
   background: #0d1117;
   border: 1px solid #30363d;

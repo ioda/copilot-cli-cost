@@ -20,6 +20,55 @@ The calculator stores canonical cost in USD and converts to a selected display c
 - Standalone calculator CLI for sample data, JSON files, completed session events, and live snapshots
 - USD-first cost model with optional display currency conversion
 
+### Model capability and price evaluation
+
+The panel's **Model pricing** tab separates **Powerful**, **Versatile**, and **Lightweight**
+models. Each subtab includes published prices, a reasoning-effort selector (Non-reasoning,
+Minimal, Low, Medium, High, XHigh, Max), an editable workload, the published benchmark-score
+matrix, and an estimated value ranking. This is advisory: it does not switch the CLI model.
+
+Capability scores are an explicitly dated snapshot of the
+[Artificial Analysis Intelligence Index](https://artificialanalysis.ai/leaderboards/models).
+Unknown effort-specific scores are not inferred from prices, similar models, or unspecified
+effort results. Qualified scores are shown but not used for recommendations. Anthropic
+adaptive-reasoning/default-fallback configurations are labeled; benchmark settings do not
+guarantee equivalent settings or fallback behavior in the CLI.
+
+Within one category and effort, models must reach **85% of the best verified score** by default.
+Among eligible models:
+
+```text
+Value = (score / best category score)^2
+        / (workload cost / lowest eligible workload cost)
+```
+
+The capability floor is editable. Value is a selection heuristic, not a measured accuracy ratio,
+and cannot be compared across categories or effort settings. Coverage is shown; a category
+with only one scored candidate is labeled as a baseline, not a competitive comparison.
+
+The default fixed conversation sample contains **384 uncached input**, **22,495 cached input**,
+**27,619 cache-write**, and **201 billable output** tokens. It is not live session usage or an
+observed task cost. Workload cost multiplies each token quantity by its USD rate per million.
+For models without a separate write price, write prompt tokens are priced as input. Total prompt
+tokens select the applicable long-context tier per model. Include billable reasoning in the
+output estimate without double-counting it. Actual models and effort settings can use different
+amounts of tokens and retries; fixed-workload estimates do not measure actual task success or cost.
+Currency conversion changes displayed costs, not the canonical USD ranking.
+
+The published pricing catalog was verified against GitHub on **2026-10-01** and contains
+35 models. Compared with the original checkout, it adds pricing and aliases for GPT-5.6
+Luna/Sol/Terra, GPT-6 Astra/Luna/Sol, GPT-6.1 Sol, Claude Opus 4.8 Fast/5/5.5,
+Claude Sonnet 5/5.5, Claude Fable 5.1, Gemini 3.6/3.7/3.8 Flash, MAI-Code-1.1-Flash,
+Grok 4.5/4.6/4.7, and Kimi K2.7 Code/K3. Previously configured rates and aliases are
+unchanged, including legacy Claude Sonnet 4.5, Claude Opus 4.5/4.6, Gemini 2.5 Pro,
+Gemini 3 Flash, and Raptor Mini. Legacy-only models are not in the current published panel
+catalog, but remain available to calculate older sessions.
+
+For example, `gpt-6.1-sol` (Powerful; alias `GPT-6.1 Sol`) has:
+default input/cached/write/output **$2/$0.10/$2.50/$10** per million, and above **272,000**
+input tokens **$4/$0.20/$5/$15**. The source changes now live in this checkout; the user's
+installed plugin and its user-scoped shim remain separate and are not redirected here.
+
 ## Install
 
 Install by executing the install script for your platform.
