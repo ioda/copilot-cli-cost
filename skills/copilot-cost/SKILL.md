@@ -5,6 +5,8 @@ description: Estimate Copilot CLI session cost from model usage, token counts, s
 
 Use this skill when the user asks about Copilot CLI session cost, AI credits, plan comparison, or currency conversion.
 
+For published model pricing, benchmark scores, or category/effort value rankings without opening the panel, call the `copilot_cost_model_pricing` tool.
+
 Cost principles:
 
 - Treat USD as canonical because GitHub model rates and AI Credits are documented in USD.

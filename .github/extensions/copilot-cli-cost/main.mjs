@@ -5,6 +5,8 @@ import { calculateSessionCost } from "../../../src/core/calculate.js";
 import { benchmarkSource, modelBenchmarks } from "../../../src/core/benchmarks.js";
 import { formatMoney } from "../../../src/core/currency.js";
 import { getUsdExchangeRate } from "../../../src/core/fx-rates.js";
+import { evaluationCategories, evaluationEfforts } from "./content/model-evaluation.js";
+import { getModelPricingData } from "../../../src/core/model-pricing-data.js";
 import { modelEquivalents, modelMetadata, pricingSource, publishedPricingModels, usageBasedRates } from "../../../src/core/rates.js";
 import { listLiveSessions, readLatestLiveSession, readLiveSession, writeLiveSession } from "../../../src/core/live-session-store.js";
 import { listCompletedSessionSummaries, readRichestSessionUsageFromEvents, readSessionUsageFromEvents, readSessionWorkspaceMetadata } from "../../../src/core/session-events.js";
@@ -67,6 +69,30 @@ session = await joinSession({
         });
         return JSON.stringify(data, null, 2);
       }
+    },
+    {
+      name: "copilot_cost_model_pricing",
+      description: "Get published Copilot model prices, benchmark scores, and the panel's capability/value evaluation without opening the cost panel.",
+      parameters: {
+        type: "object",
+        properties: {
+          category: { type: "string", enum: evaluationCategories, description: "Capability category, default Powerful." },
+          effort: { type: "string", enum: evaluationEfforts, description: "Reasoning effort, default max." },
+          qualityFloor: { type: "number", description: "Minimum capability fraction of the category's best score, default 0.85." },
+          workload: {
+            type: "object",
+            description: "Optional fixed workload token buckets; defaults to the panel's sample workload.",
+            properties: {
+              uncachedInputTokens: { type: "integer" },
+              cachedInputTokens: { type: "integer" },
+              cacheWriteTokens: { type: "integer" },
+              outputTokens: { type: "integer" }
+            }
+          }
+        }
+      },
+      skipPermission: true,
+      handler: async (args = {}) => JSON.stringify(getModelPricingData(args), null, 2)
     }
   ]
 });

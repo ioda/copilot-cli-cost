@@ -14,6 +14,7 @@ The calculator stores canonical cost in USD and converts to a selected display c
 - `/cost session <session-id>` for completed local sessions
 - Native cost panel with token bucket breakdowns
 - Model pricing subtabs for Powerful, Versatile, and Lightweight, with benchmark-backed capability/price comparisons
+- `copilot_cost_model_pricing` tool for model prices, benchmark evidence, and value rankings without opening the panel
 - What-if subscription comparison for Copilot Free, Pro, Pro+, Max, Business, Enterprise, and Student
 - Display currency selector backed by cached Frankfurter USD exchange rates
 - Statusline cost segment with optional passthrough to another statusline
@@ -54,6 +55,10 @@ tokens select the applicable long-context tier per model. Include billable reaso
 output estimate without double-counting it. Actual models and effort settings can use different
 amounts of tokens and retries; fixed-workload estimates do not measure actual task success or cost.
 Currency conversion changes displayed costs, not the canonical USD ranking.
+
+Call the `copilot_cost_model_pricing` tool to retrieve the panel's pricing catalog and evaluation
+as structured JSON without opening the panel. It accepts `category`, `effort`, `qualityFloor`, and
+an optional `workload`; omitted values use the panel defaults.
 
 The published pricing catalog was verified against GitHub on **2026-10-01** and contains
 35 models. Compared with the original checkout, it adds pricing and aliases for GPT-5.6
